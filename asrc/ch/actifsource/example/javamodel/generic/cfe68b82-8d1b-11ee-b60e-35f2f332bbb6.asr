@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource format="5.6.0" guid="cfe68b82-8d1b-11ee-b60e-35f2f332bbb6">
+  <predicate guid="3169f49a-f91f-11d9-bb45-5fabdff7c7da">
+    <object statement-guid="cfe6b294-8d1b-11ee-b60e-35f2f332bbb6" type="resource" guid="2576b879-f91f-11d9-bb45-5fabdff7c7da" />
+  </predicate>
+  <predicate guid="32d2854d-f91f-11d9-bb45-5fabdff7c7da">
+    <object statement-guid="cfe7eb16-8d1b-11ee-b60e-35f2f332bbb6" type="resource" guid="118e9dc4-1b6c-11dd-af33-07ccc9113053" />
+  </predicate>
+  <predicate guid="33fc8660-f91f-11d9-bb45-5fabdff7c7da">
+    <object statement-guid="cfe7c405-8d1b-11ee-b60e-35f2f332bbb6" type="literal">DecoElement</object>
+  </predicate>
+</resource>
+

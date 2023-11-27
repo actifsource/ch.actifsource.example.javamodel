@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource format="5.6.0" guid="bd30d030-8d35-11ee-a7ca-3ba7c26ad18f">
+  <predicate guid="3169f49a-f91f-11d9-bb45-5fabdff7c7da">
+    <object statement-guid="bd30d033-8d35-11ee-a7ca-3ba7c26ad18f" type="resource" guid="01144e62-8cf8-11ee-8026-f131a348395a" />
+  </predicate>
+  <predicate guid="33fc8660-f91f-11d9-bb45-5fabdff7c7da">
+    <object statement-guid="8471727e-8d3e-11ee-8a81-3b7615e2becb" type="literal">peerRootElement</object>
+  </predicate>
+</resource>
+
