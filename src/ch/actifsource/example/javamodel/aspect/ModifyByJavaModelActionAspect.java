@@ -45,10 +45,10 @@ public class ModifyByJavaModelActionAspect implements ch.actifsource.environment
 		
 		// Apply model to selected model.
 		INodeSet ignoreProperties = new NodeSet(CorePackage.Resource_typeOf);
-	    IPatch diffPatch = ResourceSynchronizePatchCreateVisitor.createSynchronizePatch(modifiable, selectedRootElement, rootElement, ignoreProperties, true);
-	    if (!diffPatch.isEmpty()) {
-	      modifiable.execute(new ApplyPatchJob(diffPatch));
-	    }
+    IPatch diffPatch = ResourceSynchronizePatchCreateVisitor.createSynchronizePatch(modifiable, selectedRootElement, rootElement, ignoreProperties, true);
+    if (!diffPatch.isEmpty()) {
+      modifiable.execute(new ApplyPatchJob(diffPatch));
+    }
 	}	
 }
 
