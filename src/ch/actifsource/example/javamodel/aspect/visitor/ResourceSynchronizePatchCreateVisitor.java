@@ -28,6 +28,7 @@ import ch.actifsource.core.set.INodeList;
 import ch.actifsource.core.set.INodeSet;
 import ch.actifsource.core.set.IStatementSet;
 import ch.actifsource.core.set.NodeList;
+import ch.actifsource.core.set.NodeSet;
 import ch.actifsource.core.set.StatementSet;
 import ch.actifsource.core.util.NodeUtil;
 import ch.actifsource.util.Assert;
@@ -38,10 +39,17 @@ import ch.actifsource.util.collection.IMultiMapOrdered;
 
 /**
  * Define the patch extractor visitor.
- * The patch contains the steps to transform the existing resource to the toResource (similar typeOfs are equals but different guid). 
+ * The patch contains the steps to transform the existing resource to the toResource (similar typeOfs are equals but different guid).
  */
 public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisitor {
 
+  /**
+   * Returns the patch contains the steps to transform the existing resource to the toResource (similar).
+   */
+  public static IPatch createSynchronizePatch(IReadJobExecutor readJobExecutor, PackagedResource fromResource, IDynamicResource toResource) {
+    return createSynchronizePatch(readJobExecutor, fromResource, toResource, new NodeSet(CorePackage.Resource_typeOf));
+  }
+  
   /**
    * Returns the patch contains the steps to transform the existing resource to the toResource (similar).
    */
@@ -54,7 +62,7 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
    */
   public static IPatch createSynchronizePatch(IReadJobExecutor readJobExecutor, PackagedResource fromResource, IDynamicResource toResource, INodeSet ignoreProperties, boolean syncExistingResources) {
     PatchBuilder patchBuilder = new PatchBuilder(readJobExecutor);
-    toResource.accept(new ResourceSynchronizePatchCreateVisitor(readJobExecutor, fromResource.getPackage(), fromResource.getResource(), toResource, ignoreProperties, patchBuilder, syncExistingResources));
+    toResource.accept(new ResourceSynchronizePatchCreateVisitor(readJobExecutor, fromResource.getPackage(), fromResource.getResource(), ignoreProperties, patchBuilder, syncExistingResources));
     return patchBuilder.buildPatch();
   }
  
@@ -266,8 +274,6 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
   
   private final INode                             fFromResource;
   
-  private final IDynamicResource                  fToResource;
-  
   private final Package                           fPackage;
   
   private final IPatchCreateFactory               fPatchCreateFactory;
@@ -279,22 +285,21 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
   private final Set<IDynamicResource>             fCreatedResources;
   
   
-  public ResourceSynchronizePatchCreateVisitor(IReadJobExecutor readJobExecutor, Package pkg, INode fromResource, IDynamicResource toResource, INodeSet ignoreProperties, IPatchCreateFactory patchCreateFactory, 
+  public ResourceSynchronizePatchCreateVisitor(IReadJobExecutor readJobExecutor, Package pkg, INode fromResource, INodeSet ignoreProperties, IPatchCreateFactory patchCreateFactory, 
       boolean syncExistingResources) {
-    this(readJobExecutor, pkg, fromResource, toResource, ignoreProperties, patchCreateFactory, syncExistingResources, new HashMap<CacheKey, Boolean>());
+    this(readJobExecutor, pkg, fromResource, ignoreProperties, patchCreateFactory, syncExistingResources, new HashMap<CacheKey, Boolean>());
   }
   
-  public ResourceSynchronizePatchCreateVisitor(IReadJobExecutor readJobExecutor, Package pkg, INode fromResource, IDynamicResource toResource, INodeSet ignoreProperties, IPatchCreateFactory patchCreateFactory, 
+  public ResourceSynchronizePatchCreateVisitor(IReadJobExecutor readJobExecutor, Package pkg, INode fromResource, INodeSet ignoreProperties, IPatchCreateFactory patchCreateFactory, 
       boolean syncExistingResources, IMap<CacheKey, Boolean> checkDeepEqualsCache) {
-    this(readJobExecutor, pkg, fromResource, toResource, ignoreProperties, patchCreateFactory, syncExistingResources, checkDeepEqualsCache, new HashMap<IDynamicResource, INode>(), new HashSet<IDynamicResource>());
+    this(readJobExecutor, pkg, fromResource, ignoreProperties, patchCreateFactory, syncExistingResources, checkDeepEqualsCache, new HashMap<IDynamicResource, INode>(), new HashSet<IDynamicResource>());
   }
   
-  public ResourceSynchronizePatchCreateVisitor(IReadJobExecutor readJobExecutor, Package pkg, INode fromResource, IDynamicResource toResource, INodeSet ignoreProperties, IPatchCreateFactory patchCreateFactory, 
+  public ResourceSynchronizePatchCreateVisitor(IReadJobExecutor readJobExecutor, Package pkg, INode fromResource, INodeSet ignoreProperties, IPatchCreateFactory patchCreateFactory, 
       boolean syncExistingResources, IMap<CacheKey, Boolean> checkDeepEqualsCache, HashMap<IDynamicResource, INode> resourceToNodeMap, Set<IDynamicResource> createdResources) {
     fReadJobExecutor = readJobExecutor;
     fPackage = pkg;
     fFromResource = fromResource;
-    fToResource = toResource;
     fPatchCreateFactory = patchCreateFactory;
     fIgnoreProperties = ignoreProperties;
     fSyncExistingResources = syncExistingResources;
@@ -388,28 +393,26 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
    * Returns true if the two resources (fromObject and toObject) are deeply  equals.
    */
   private boolean isDeepEquals(INode fromObject, IDynamicResource toObject) {
-    //if (!toObject.isVirtual()) return fromObject.equals(toObject.getResource());
-    if (fromObject.equals(fFromResource) && fToResource.equals(toObject)) return true;
-    
+    if (!fSyncExistingResources && !toObject.isVirtual()) return fromObject.equals(toObject.getResource());
+    if (!isTypeOfEquals(fromObject, toObject)) return false;
+
+    /** Check whether both objects have already been checked and are identical **/ 
     CacheKey cacheKey = new CacheKey(fromObject, toObject);
     Boolean equals = fCheckDeepEqualsCache.get(cacheKey);
     if (equals != null) return equals;
     
-    if (!isTypeOfEquals(fromObject, toObject)) return false;
+    /** Check cycle detection. If the same objects are compared within a detection, it is assumed that they are similar; if they are not similar, other properties must be dissimilar. **/ 
+    if (fCheckDeepEqualsCache.containsKey(cacheKey)) {
+      return true;
+    }
+    fCheckDeepEqualsCache.put(cacheKey, null);
+
+    /** check whether both objects are identical **/
     EqualsPatch equalsPatch = new EqualsPatch();
-    toObject.accept(new ResourceSynchronizePatchCreateVisitor(fReadJobExecutor, fPackage, fromObject, toObject, fIgnoreProperties, equalsPatch, fSyncExistingResources, fCheckDeepEqualsCache));
+    toObject.accept(new ResourceSynchronizePatchCreateVisitor(fReadJobExecutor, fPackage, fromObject, fIgnoreProperties, equalsPatch, fSyncExistingResources, fCheckDeepEqualsCache));
     boolean isEquals = equalsPatch.isEquals();
-    
     fCheckDeepEqualsCache.put(cacheKey, isEquals);
     return isEquals;
-  }
-  
-  /**
-   * Returns true if the dynamic resource is virtual (don't exist).
-   */
-  private boolean isVirtual(IDynamicResource dynamicResource) {
-    if (fSyncExistingResources) return true;
-    return dynamicResource.isVirtual();
   }
   
   /**********************
@@ -428,6 +431,7 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
   }
   
   /**
+   * Create Patch:
    * Create new or existing resource.
    */
   private INode getOrCreateNewResource(IDynamicResource resource, IPatchCreateFactory factory) {
@@ -445,17 +449,17 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
    * @param dynamicResourceToObjectMap = contains the mapping fromResource to toResource.
    * @param factory
    */
-  private void createDeepSynchronizeDynamicResourcePatch(IMap<IDynamicResource, INode> dynamicResourceToObjectMap, IPatchCreateFactory factory) {
-    for (IDynamicResource resource :dynamicResourceToObjectMap.keySet()) {
+  private void createDeepSynchronizeDynamicResourcePatch(IMap<IDynamicResource, INode> dynamicResourceToNodeMap, IPatchCreateFactory factory) {
+    for (IDynamicResource toResource :dynamicResourceToNodeMap.keySet()) {
       if (factory.isCanceled()) return;
          
-      // Check if already visited.
-      if (isVirtual(resource) && !fCreatedResources.contains(resource)) {
-        Package pkg = (resource.isVirtual())? fPackage: Select.mainPackage(fReadJobExecutor, resource.getResource());
+      /** Synchronize all objects within the map. **/
+      if ((fSyncExistingResources || toResource.isVirtual()) && !fCreatedResources.contains(toResource)) {
+        Package pkg = (toResource.isVirtual())? fPackage: Select.mainPackage(fReadJobExecutor, toResource.getResource());
         if (pkg.isModifiable()) {
-          fCreatedResources.add(resource); 
-          INode toObject =  dynamicResourceToObjectMap.get(resource);        
-          resource.accept(new ResourceSynchronizePatchCreateVisitor(fReadJobExecutor, pkg, toObject, resource, fIgnoreProperties, fPatchCreateFactory, fSyncExistingResources, fCheckDeepEqualsCache, fResourceToNodeMap, fCreatedResources));
+          fCreatedResources.add(toResource); 
+          INode fromResource =  dynamicResourceToNodeMap.get(toResource);        
+          toResource.accept(new ResourceSynchronizePatchCreateVisitor(fReadJobExecutor, pkg, fromResource, fIgnoreProperties, fPatchCreateFactory, fSyncExistingResources, fCheckDeepEqualsCache, fResourceToNodeMap, fCreatedResources));
         }
       }
     }
@@ -476,13 +480,13 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
   private void createSynchronizeToExistingNodePath(IStatementSet fromStatements, INode predicate, INodeList toObjects, IPatchCreateFactory factory) {
     if (factory.isCanceled()) return;
     
-    // Remove all statement if the target has no statements.
+    /** Remove all statement if the target has no statements. **/
     if (toObjects.isEmpty()) {
       removeAllStatements(fromStatements, factory);
       return;
     }
     
-    // Define the next statement index to check.
+    /** Define the next statement index to check. **/
     int nextStatementIndex = 0;
     
     for (int toIndex = 0; toIndex < toObjects.size(); toIndex++) {
@@ -505,7 +509,7 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
       }
     }
     
-    // Remove all dispensable statements
+    /** Remove all dispensable statements **/
     for (int fromIndex = nextStatementIndex; fromIndex < fromStatements.size(); fromIndex++) {
       Statement fromStatement = fromStatements.get(fromIndex);
       factory.removeStatement(fromStatement, getNext(fromStatements, fromIndex));
@@ -530,13 +534,13 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
   private <T extends IDynamicResource> IMap<IDynamicResource, INode> createSynchronizeToDynamicResourcePath(IStatementSet fromStatements, final INode predicate, List<T> toObjects, IPatchCreateFactory factory) {
     if (factory.isCanceled()) return CollectionUtil.emptyMap();
    
-    // Remove all statement if the target has no statements.
+    /** Remove all statement if the target has no statements. **/
     if (toObjects.isEmpty()) {
       removeAllStatements(fromStatements, factory);
       return CollectionUtil.emptyMap();
     }
     
-    // find equals topEqualsIndex
+    /** Find equals topEqualsIndex **/
     int topFromAndToEqualsIndex = -1;
     
     for (int index = 0; index < toObjects.size(); index++) {
@@ -554,12 +558,12 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
       break;
     }
     
-    // check is deep equals
+    /** Check is deep equals **/
     if (topFromAndToEqualsIndex == (fromStatements.size() - 1) && topFromAndToEqualsIndex == (toObjects.size() - 1)) {
       return CollectionUtil.emptyMap();
     }
     
-    // find equals bottomEqualsIndex
+    /** Find equals bottomEqualsIndex **/
     int bottomToEqualsIndex = toObjects.size();
     int bottomFromEqualsIndex = fromStatements.size();
     
@@ -581,7 +585,7 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
     }
     final Statement bottomFromEqualsStatement = (bottomFromEqualsIndex < fromStatements.size()) ? fromStatements.get(bottomFromEqualsIndex): null;
     
-    // remove obsolete statements
+    /** Remove obsolete statements **/
     List<Statement> fromTopToBottomStatements = new ArrayList<>();
     int lastMatchToIndex = topFromAndToEqualsIndex + 1;
     
@@ -597,12 +601,12 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
           continue;
         }
       }
-      //delete obsolete statement
+      /** Delete obsolete statement **/
       factory.disposeStatement(fromStatement, getNext(fromStatements, index));
     }
     
-    // create missing statements
-    HashMap<IDynamicResource, INode> dynamicResourceToObjectMap = new HashMap<>(bottomToEqualsIndex - (topFromAndToEqualsIndex+1));
+    /** Create missing statements. **/
+    HashMap<IDynamicResource, INode> dynamicResourceToNodeMap = new HashMap<>(bottomToEqualsIndex - (topFromAndToEqualsIndex+1));
     final Relationship predicateRelationship = Select.relationship(fReadJobExecutor, predicate);
     
     for (int index = topFromAndToEqualsIndex + 1; index < bottomToEqualsIndex; index++) {
@@ -613,7 +617,7 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
       if (index - (topFromAndToEqualsIndex + 1) < fromTopToBottomStatements.size()) {
         Statement fromStatement = fromTopToBottomStatements.get(index - (topFromAndToEqualsIndex + 1));        
         fResourceToNodeMap.put(toObject, fromStatement.object());
-        dynamicResourceToObjectMap.put(toObject, fromStatement.object());
+        dynamicResourceToNodeMap.put(toObject, fromStatement.object());
         continue;
       }
       
@@ -624,7 +628,7 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
           fResourceToNodeMap.put(toObject, objectNode);
           factory.addStatement(new Statement(fPackage, fFromResource, predicate, objectNode, predicateRelationship), 
               (bottomFromEqualsStatement != null) ? new IStatementPosition.Before(bottomFromEqualsStatement) : IStatementPosition.AT_END);
-          dynamicResourceToObjectMap.put(toObject, objectNode);
+          dynamicResourceToNodeMap.put(toObject, objectNode);
           continue;
         }
          
@@ -638,9 +642,9 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
             factory.addStatement(new Statement(fPackage, fFromResource, predicate, newResource, predicateRelationship), 
                 (bottomFromEqualsStatement != null) ? new IStatementPosition.Before(bottomFromEqualsStatement) : IStatementPosition.AT_END);
             
-            HashMap<IDynamicResource, INode> dynamicResourceToObjectMap = new HashMap<>();
-            dynamicResourceToObjectMap.put(toObject, newResource);
-            createDeepSynchronizeDynamicResourcePatch(dynamicResourceToObjectMap, factory);
+            HashMap<IDynamicResource, INode> dynamicResourceToNodeMap = new HashMap<>();
+            dynamicResourceToNodeMap.put(toObject, newResource);
+            createDeepSynchronizeDynamicResourcePatch(dynamicResourceToNodeMap, factory);
           }
         });
         continue;
@@ -652,9 +656,9 @@ public class ResourceSynchronizePatchCreateVisitor implements IPropertyValueVisi
       factory.addStatement(new Statement(fPackage, fFromResource, predicate, newResource, predicateRelationship), 
           (bottomFromEqualsStatement != null) ? new IStatementPosition.Before(bottomFromEqualsStatement) : IStatementPosition.AT_END);
       
-      dynamicResourceToObjectMap.put(toObject, newResource);
+      dynamicResourceToNodeMap.put(toObject, newResource);
     }
-    return dynamicResourceToObjectMap;
+    return dynamicResourceToNodeMap;
   }
   
   /********************
