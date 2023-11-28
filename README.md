@@ -31,7 +31,7 @@ rootElement.setDecoElement(decoMap);
 ![Modify model](images/modify.png)
 
 ## Requirements
-Actifsource Workbench Enterprise Edition
+Actifsource Workbench Community Edition
 
 ## License
 [http://www.actifsource.com/company/license](http://www.actifsource.com/company/license)
