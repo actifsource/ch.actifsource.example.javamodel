@@ -5,7 +5,6 @@ import ch.actifsource.core.PackagedResource;
 import ch.actifsource.core.Resource;
 import ch.actifsource.core.update.ApplyPatchJob;
 import ch.actifsource.core.update.IModifiable;
-import ch.actifsource.example.javamodel.aspect.visitor.ResourceSynchronizePatchCreateVisitor;
 import ch.actifsource.example.javamodel.generic.javamodel.DecoElement;
 import ch.actifsource.example.javamodel.generic.javamodel.IDecoElement;
 import ch.actifsource.example.javamodel.generic.javamodel.RootElement;
@@ -16,6 +15,8 @@ import ch.actifsource.core.set.INodeSet;
 import ch.actifsource.core.set.NodeSet;
 import ch.actifsource.util.collection.CollectionUtil;
 import ch.actifsource.util.collection.MultiMapOrdered;
+import ch.actifsource.transientresource.SynchronizePatchCreateVisitor;
+
 
 public class ModifyByJavaModelActionAspect implements ch.actifsource.environment.modelmenu.aspect.IMenuItemActionAspect {
 
@@ -46,7 +47,8 @@ public class ModifyByJavaModelActionAspect implements ch.actifsource.environment
 		// Apply model to selected model.
 		INodeSet ignoreProperties = new NodeSet(CorePackage.Resource_typeOf);
 		boolean syncExistingResources =  true;
-    IPatch diffPatch = ResourceSynchronizePatchCreateVisitor.createSynchronizePatch(modifiable, selectedRootElement, rootElement, ignoreProperties, syncExistingResources);
+		IPatch diffPatch = SynchronizePatchCreateVisitor.createSynchronizePatch(modifiable, selectedRootElement, rootElement, ignoreProperties, syncExistingResources);
+//    IPatch diffPatch = ResourceSynchronizePatchCreateVisitor.createSynchronizePatch(modifiable, selectedRootElement, rootElement, ignoreProperties, syncExistingResources);
     if (!diffPatch.isEmpty()) {
       modifiable.execute(new ApplyPatchJob(diffPatch));
     }
